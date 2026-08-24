@@ -7,18 +7,16 @@ import json
 import re
 
 st.set_page_config(
-    page_title="AI Plant Nutrient Monitoring",
+    page_title="AI Plant Micronutrient Monitoring",
     page_icon="🌱",
     layout="wide"
 )
 
-st.title("🌱 AI Plant Nutrient Monitoring System")
-st.write("Image-Based Plant Problem and Nutrient Deficiency Analysis")
-
-st.divider()
+st.title("🌱 AI Plant Micronutrient Monitoring System")
+st.write("Image-Based Plant Micronutrient Estimation")
 
 # =====================================================
-# AI CLIENT
+# GEMINI
 # =====================================================
 
 if "GEMINI_API_KEY" not in st.secrets:
@@ -30,14 +28,12 @@ client = genai.Client(
 )
 
 # =====================================================
-# IMAGE INPUT
+# IMAGE
 # =====================================================
 
-st.header("📷 Plant Image Input")
+st.header("📷 Plant Image")
 
-camera_image = st.camera_input(
-    "Take a picture of the plant"
-)
+camera_image = st.camera_input("Take a picture of the plant")
 
 uploaded_image = st.file_uploader(
     "Or upload a plant image",
@@ -56,59 +52,86 @@ if image_file:
         use_container_width=True
     )
 
-    st.success("✅ Image received")
+    if st.button("🤖 Analyze Micronutrients"):
 
-else:
-
-    st.info(
-        "Upload or capture a plant image to start AI analysis."
-    )
-
-# =====================================================
-# AI IMAGE ANALYSIS
-# =====================================================
-
-if image_file:
-
-    if st.button("🤖 Analyze Plant Image"):
-
-        with st.spinner("AI is analyzing the plant image..."):
+        with st.spinner("Analyzing plant..."):
 
             prompt = """
-You are an agricultural plant-health image analysis assistant.
+You are an agricultural plant image analysis AI.
 
 Analyze ONLY the plant shown in the image.
 
-Return ONLY valid JSON using this structure:
+Estimate the possible micronutrient status from visible
+leaf colour, chlorosis, necrosis, leaf deformation and
+other visible symptoms.
+
+Return ONLY valid JSON.
+
+Use this exact structure:
 
 {
+  "plant_name": "",
   "plant_condition": "",
   "visible_problem": "",
   "possible_deficiency": "",
   "confidence": 0,
+
+  "micronutrients": {
+    "Iron_Fe": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    },
+    "Zinc_Zn": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    },
+    "Boron_B": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    },
+    "Manganese_Mn": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    },
+    "Copper_Cu": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    },
+    "Molybdenum_Mo": {
+      "estimated_value": 0,
+      "status": "",
+      "unit": "mg/kg"
+    }
+  },
+
   "reason": "",
   "recommendation": ""
 }
 
-Rules:
+IMPORTANT RULES:
 
-1. Identify visible symptoms from the image.
-2. If the plant appears healthy, say:
-   "No obvious visible problem"
-   and "No clear nutrient deficiency visible".
-3. Do not invent a deficiency.
-4. Nutrient deficiency from an image is only a POSSIBLE diagnosis.
-5. Do not claim a nutrient deficiency is confirmed.
-6. Mention the likely deficiency only when the visible symptoms reasonably support it.
-7. Confidence must be between 0 and 100.
-8. Give a short reason based on visible symptoms.
-9. Give a cautious recommendation to confirm using soil/plant testing.
+1. Analyze the actual plant in the image.
+2. Do NOT return the same micronutrient values for every plant.
+3. Values must vary according to visible plant symptoms.
+4. If a nutrient deficiency is not visually supported,
+   mark its status as "NORMAL".
+5. Do not claim that image analysis is a laboratory measurement.
+6. The micronutrient values are ESTIMATED values only.
+7. Use realistic-looking different values for different plants.
+8. Confidence must be between 0 and 100.
+9. If the plant looks healthy, do not invent a deficiency.
+10. Give a short explanation based only on visible symptoms.
 """
 
             try:
 
                 response = client.models.generate_content(
-                  model="gemini-3.6-flash",
+                    model="gemini-3.6-flash",
                     contents=[
                         types.Part.from_bytes(
                             data=image_file.getvalue(),
@@ -128,7 +151,7 @@ Rules:
 
                 result = json.loads(text)
 
-                st.session_state["ai_result"] = result
+                st.session_state["plant_result"] = result
 
             except Exception as e:
 
@@ -137,339 +160,270 @@ Rules:
                 )
 
 # =====================================================
-# DISPLAY AI RESULT
+# RESULT
 # =====================================================
 
-if "ai_result" in st.session_state:
+if "plant_result" in st.session_state:
 
-    result = st.session_state["ai_result"]
+    result = st.session_state["plant_result"]
 
     st.divider()
 
     st.header("🤖 AI Image Analysis Result")
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
 
-    with c1:
+    c1.metric(
+        "Plant",
+        result.get("plant_name", "Unknown")
+    )
 
-        st.subheader("🌱 Plant Condition")
+    c2.metric(
+        "Condition",
+        result.get("plant_condition", "Unknown")
+    )
 
-        st.write(
-            result.get(
-                "plant_condition",
-                "Not available"
-            )
+    c3.metric(
+        "Confidence",
+        str(result.get("confidence", 0)) + "%"
+    )
+
+    st.subheader("🔍 Visible Problem")
+
+    st.write(
+        result.get(
+            "visible_problem",
+            "No obvious problem"
         )
+    )
 
-        st.subheader("🔍 Visible Problem")
+    st.subheader("🧪 Possible Deficiency")
 
-        st.write(
-            result.get(
-                "visible_problem",
-                "Not available"
-            )
+    st.warning(
+        result.get(
+            "possible_deficiency",
+            "No clear deficiency"
         )
-
-    with c2:
-
-        st.subheader("🧪 Possible Deficiency")
-
-        st.warning(
-            result.get(
-                "possible_deficiency",
-                "No clear deficiency"
-            )
-        )
-
-        st.subheader("📊 AI Confidence")
-
-        st.metric(
-            "Confidence",
-            str(result.get("confidence", 0)) + "%"
-        )
+    )
 
     st.subheader("🔎 Reason")
 
     st.write(
         result.get(
             "reason",
-            "No explanation available"
+            "Not available"
         )
     )
 
-    st.subheader("💡 Recommendation")
+    # =================================================
+    # MICRONUTRIENTS
+    # =================================================
 
-    st.info(
-        result.get(
-            "recommendation",
-            "Confirm using appropriate soil or plant testing."
-        )
+    st.divider()
+
+    st.header("🧪 Estimated Micronutrient Monitoring")
+
+    micro = result.get(
+        "micronutrients",
+        {}
     )
 
-st.divider()
+    rows = []
 
-# =====================================================
-# SOIL DATA
-# =====================================================
+    for name, data in micro.items():
 
-st.header("🌍 Soil Parameters")
+        rows.append({
+            "Micronutrient": name,
+            "Estimated Value": data.get(
+                "estimated_value",
+                0
+            ),
+            "Unit": data.get(
+                "unit",
+                "mg/kg"
+            ),
+            "Status": data.get(
+                "status",
+                "NORMAL"
+            )
+        })
 
-c1, c2, c3 = st.columns(3)
+    nutrient_df = pd.DataFrame(rows)
 
-ph = c1.number_input(
-    "Soil pH",
-    min_value=0.0,
-    max_value=14.0,
-    value=6.5
-)
-
-moisture = c2.number_input(
-    "Moisture (%)",
-    min_value=0.0,
-    max_value=100.0,
-    value=48.0
-)
-
-temperature = c3.number_input(
-    "Temperature (°C)",
-    min_value=0.0,
-    max_value=60.0,
-    value=27.0
-)
-
-st.divider()
-
-# =====================================================
-# NUTRIENT DATA
-# =====================================================
-
-st.header("🧪 Soil Micronutrient Data")
-
-c1, c2, c3 = st.columns(3)
-
-fe = c1.number_input("Iron Fe", value=18.0)
-zn = c2.number_input("Zinc Zn", value=15.0)
-boron = c3.number_input("Boron B", value=0.4)
-
-c1, c2, c3 = st.columns(3)
-
-mn = c1.number_input("Manganese Mn", value=20.0)
-cu = c2.number_input("Copper Cu", value=2.1)
-mo = c3.number_input("Molybdenum Mo", value=0.18)
-
-nutrients = {
-    "Iron (Fe)": [fe, 20],
-    "Zinc (Zn)": [zn, 15],
-    "Boron (B)": [boron, 0.5],
-    "Manganese (Mn)": [mn, 20],
-    "Copper (Cu)": [cu, 2],
-    "Molybdenum (Mo)": [mo, 0.2]
-}
-
-results = []
-
-for nutrient, values in nutrients.items():
-
-    value = values[0]
-    minimum = values[1]
-
-    status = "LOW" if value < minimum else "NORMAL"
-
-    results.append({
-        "Nutrient": nutrient,
-        "Value": value,
-        "Status": status
-    })
-
-nutrient_df = pd.DataFrame(results)
-
-st.subheader("📊 Current Nutrient Status")
-
-st.dataframe(
-    nutrient_df,
-    use_container_width=True,
-    hide_index=True
-)
-
-deficiencies = nutrient_df[
-    nutrient_df["Status"] == "LOW"
-]["Nutrient"].tolist()
-
-# =====================================================
-# DEFICIENCY
-# =====================================================
-
-st.header("🚨 Soil-Based Deficiency Detection")
-
-if deficiencies:
-
-    st.error(
-        "Low nutrient detected: "
-        + ", ".join(deficiencies)
+    st.dataframe(
+        nutrient_df,
+        use_container_width=True,
+        hide_index=True
     )
 
-else:
+    # =================================================
+    # LOW NUTRIENTS
+    # =================================================
 
-    st.success(
-        "No low nutrient detected from current soil data."
-    )
+    st.header("🚨 Micronutrient Deficiency")
 
-# =====================================================
-# COMBINED DECISION
-# =====================================================
+    low = nutrient_df[
+        nutrient_df["Status"].str.upper() == "LOW"
+    ]
 
-st.divider()
+    if len(low) > 0:
 
-st.header("🧠 Combined System Decision")
+        for nutrient in low["Micronutrient"]:
 
-if "ai_result" in st.session_state:
-
-    ai_deficiency = st.session_state[
-        "ai_result"
-    ].get(
-        "possible_deficiency",
-        ""
-    )
-
-    st.write(
-        "**AI Visual Assessment:**"
-    )
-
-    st.write(ai_deficiency)
-
-    st.write(
-        "**Soil Data Assessment:**"
-    )
-
-    if deficiencies:
-
-        st.write(
-            ", ".join(deficiencies)
-        )
+            st.error(
+                "Low micronutrient detected: "
+                + nutrient
+            )
 
     else:
 
-        st.write("No low nutrient detected.")
-
-else:
-
-    st.info(
-        "Analyze a plant image to obtain the AI visual assessment."
-    )
-
-# =====================================================
-# RECOMMENDATION
-# =====================================================
-
-st.header("💡 Supplement Recommendation")
-
-recommendations = {
-    "Iron (Fe)": "Iron supplement",
-    "Zinc (Zn)": "Zinc supplement",
-    "Boron (B)": "Boron supplement",
-    "Manganese (Mn)": "Manganese supplement",
-    "Copper (Cu)": "Copper supplement",
-    "Molybdenum (Mo)": "Molybdenum supplement"
-}
-
-if deficiencies:
-
-    for item in deficiencies:
-
-        st.warning(
-            "➡️ " + recommendations[item]
+        st.success(
+            "No visually estimated micronutrient deficiency detected."
         )
 
-else:
+    # =================================================
+    # RECOMMENDATION
+    # =================================================
 
-    st.success(
-        "No supplement recommendation from current soil values."
+    st.header("💡 Supplement Recommendation")
+
+    supplement_map = {
+
+        "Iron_Fe":
+            "Iron supplement",
+
+        "Zinc_Zn":
+            "Zinc supplement",
+
+        "Boron_B":
+            "Boron supplement",
+
+        "Manganese_Mn":
+            "Manganese supplement",
+
+        "Copper_Cu":
+            "Copper supplement",
+
+        "Molybdenum_Mo":
+            "Molybdenum supplement"
+    }
+
+    if len(low) > 0:
+
+        for nutrient in low["Micronutrient"]:
+
+            if nutrient in supplement_map:
+
+                st.warning(
+                    "➡️ " +
+                    supplement_map[nutrient]
+                )
+
+    else:
+
+        st.success(
+            "No supplement recommendation."
+        )
+
+    # =================================================
+    # PUMP
+    # =================================================
+
+    st.header("⚙️ Actuator / Pump Simulation")
+
+    pump_map = {
+
+        "Iron_Fe": "Pump 1",
+
+        "Zinc_Zn": "Pump 2",
+
+        "Boron_B": "Pump 3",
+
+        "Manganese_Mn": "Pump 4",
+
+        "Copper_Cu": "Pump 5",
+
+        "Molybdenum_Mo": "Pump 6"
+    }
+
+    pump_rows = []
+
+    for nutrient, pump in pump_map.items():
+
+        status = "OFF"
+
+        if nutrient in low["Micronutrient"].values:
+
+            status = "ON"
+
+        pump_rows.append({
+
+            "Pump": pump,
+
+            "Micronutrient": nutrient,
+
+            "Status": status
+        })
+
+    pump_df = pd.DataFrame(
+        pump_rows
     )
 
-# =====================================================
-# PUMP SIMULATION
-# =====================================================
-
-st.header("⚙️ Actuator / Pump Simulation")
-
-pump_mapping = {
-    "Iron (Fe)": "Pump 1",
-    "Zinc (Zn)": "Pump 2",
-    "Boron (B)": "Pump 3",
-    "Manganese (Mn)": "Pump 4",
-    "Copper (Cu)": "Pump 5",
-    "Molybdenum (Mo)": "Pump 6"
-}
-
-pump_results = []
-
-for nutrient, pump in pump_mapping.items():
-
-    status = (
-        "ON"
-        if nutrient in deficiencies
-        else "OFF"
+    st.dataframe(
+        pump_df,
+        use_container_width=True,
+        hide_index=True
     )
 
-    pump_results.append({
-        "Pump": pump,
-        "Supplement": nutrient,
-        "Status": status
-    })
+    # =================================================
+    # GRAPH
+    # =================================================
 
-pump_df = pd.DataFrame(pump_results)
+    st.header("📊 Micronutrient Monitoring Graph")
 
-st.dataframe(
-    pump_df,
-    use_container_width=True,
-    hide_index=True
-)
+    chart_df = nutrient_df[
+        ["Micronutrient", "Estimated Value"]
+    ].set_index(
+        "Micronutrient"
+    )
 
-# =====================================================
-# GRAPH
-# =====================================================
+    st.bar_chart(chart_df)
 
-st.header("📈 Nutrient Monitoring")
+    # =================================================
+    # SYSTEM STATUS
+    # =================================================
 
-graph_df = nutrient_df.set_index(
-    "Nutrient"
-)[["Value"]]
+    st.divider()
 
-st.bar_chart(graph_df)
+    st.header("📡 System Status")
 
-# =====================================================
-# SYSTEM STATUS
-# =====================================================
+    c1, c2, c3, c4 = st.columns(4)
 
-st.divider()
+    c1.metric(
+        "Image",
+        "Analyzed"
+    )
 
-st.header("📡 System Status")
+    c2.metric(
+        "Micronutrients",
+        len(nutrient_df)
+    )
 
-c1, c2, c3, c4 = st.columns(4)
+    c3.metric(
+        "Low Nutrients",
+        len(low)
+    )
 
-c1.metric(
-    "Image",
-    "Ready" if image_file else "Waiting"
-)
+    c4.metric(
+        "Active Pumps",
+        len(low)
+    )
 
-c2.metric(
-    "Soil Deficiencies",
-    len(deficiencies)
-)
+    st.divider()
 
-c3.metric(
-    "Active Pumps",
-    len(deficiencies)
-)
-
-c4.metric(
-    "Soil pH",
-    ph
-)
-
-st.divider()
-
-st.caption(
-    "AI image results are visual estimates and should be confirmed "
-    "with appropriate agricultural testing before applying supplements."
-)
+    st.caption(
+        "Micronutrient values shown here are AI-based visual "
+        "estimates from the plant image and are not laboratory "
+        "measurements. Confirm nutrient levels using appropriate "
+        "soil or plant testing before applying supplements."
+    )
